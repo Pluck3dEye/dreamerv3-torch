@@ -214,28 +214,31 @@ highway:
   # Reward shaping configuration
   highway_reward_shaping: True
   highway_reward_config:
-    high_speed_reward: 0.4
-    reward_speed_range: [25, 30]
-    collision_reward: -1.0
-    # Lane change rewards - improved for better overtaking behavior
-    right_lane_reward: 0.05       # Small reward for rightmost lane (reduced)
-    lane_change_reward: 0.0       # No penalty for lane changes
-    smart_lane_change_reward: 0.3 # Reward for changing lane to avoid slow vehicle
-    blocked_lane_penalty: 0.2     # Penalty for staying behind slow vehicle
-    clear_lane_reward: 0.15       # Reward for being in a clear lane
-    look_ahead_distance: 50.0     # Distance to look ahead for obstacles
-    slow_vehicle_threshold: 0.7   # Consider vehicle slow if < 70% of ego speed
-    # Safety and other rewards
-    safe_distance_reward: 0.1
-    min_safe_distance: 15.0
-    safe_distance_penalty: 0.3
-    on_road_reward: 0.1
-    off_road_penalty: -0.5
-    heading_reward: 0.1
-    progress_reward_scale: 0.01
-    survival_reward: 0.01
-    success_reward: 0.5
-    shaped_reward_weight: 0.8
+    # 1) Speed – still important, but less overpowering
+    high_speed_reward: 0.4            # from 0.6 -> 0.4
+    reward_speed_range: [23.0, 27.0]  # ~83-97 km/h (matches traffic speed)
+    # 2) Safety: MUCH stronger
+    collision_reward: -5.0            # from -2.0 -> -5.0
+    on_road_reward: 0.02
+    # 3) Lane behavior – push harder to escape blocking
+    lane_change_reward: 0.0
+    smart_lane_change_reward: 0.25    # from 0.15 -> 0.25
+    blocked_lane_penalty: 0.6         # from 0.30 -> 0.6
+    overtake_reward: 0.2              # slightly up from 0.15
+    # 4) Distance / tailgating – harsher
+    min_safe_distance: 20.0           # from 15.0 -> 20.0
+    safe_distance_penalty: 1.0        # from 0.40 -> 1.0 (2.5x)
+    # 5) Lane "look ahead" / slow vehicle detection
+    look_ahead_distance: 50.0
+    slow_vehicle_threshold: 0.9       # from 0.85 -> 0.9
+    # 6) Progress / heading shaping
+    progress_reward_scale: 0.005
+    heading_reward: 0.2
+    # 7) Episode-level shaping
+    success_reward: 1.0
+    shaped_reward_weight: 0.85
+    # Optional
+    normalize_reward: False
 
 highway_kinematics:
   task: highway_highway
