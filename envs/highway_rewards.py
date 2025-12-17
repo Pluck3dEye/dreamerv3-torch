@@ -89,6 +89,13 @@ DEFAULT_REWARD_CONFIGS = {
         "lane_centering_reward": 0.2,    # Reward for staying centered
         "normalize_reward": True,
     },
+
+    "twoway" :{
+        "collision_reward": 0,
+        "left_lane_constraint": 1,
+        "left_lane_reward": 0.2,
+        "high_speed_reward": 0.8,
+    }
 }
 
 

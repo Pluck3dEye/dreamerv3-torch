@@ -1,26 +1,37 @@
 # Highway-Env Training Guide for DreamerV3-Torch
 
-This guide explains how to train autonomous driving agents using [highway-env](https://highway-env.farama.org/) environments with DreamerV3.
+This guide explains how to train autonomous driving agents using [highway-env](https://highway-env.farama.org/) environments with DreamerV3 or VQ-VAE world models.
 
 ## Table of Contents
 - [Overview](#overview)
 - [Installation](#installation)
 - [Available Environments](#available-environments)
+- [World Model Selection](#world-model-selection)
 - [Training](#training)
+- [Evaluation](#evaluation)
 - [Configuration Options](#configuration-options)
 - [Monitoring Training](#monitoring-training)
 - [Troubleshooting](#troubleshooting)
 
 ## Overview
 
-Highway-env is a collection of environments for autonomous driving and tactical decision-making. This integration allows you to train DreamerV3 world models on various driving scenarios using image-based observations.
+Highway-env is a collection of environments for autonomous driving and tactical decision-making. This integration allows you to train world models on various driving scenarios using image-based observations.
+
+### Supported World Models
+
+| World Model | Description | Training Script |
+|-------------|-------------|-----------------|
+| **DreamerV3** | RSSM-based world model with actor-critic | `train.py` or `dreamer.py` |
+| **VQ-VAE** | Vector Quantized VAE with ConvLSTM dynamics and PPO policy | `train.py` |
 
 ### Supported Environments
 
 | Environment | Description | Action Type | Vehicle Config |
 |-------------|-------------|-------------|----------------|
 | `highway` | Highway driving with lane changes | Discrete | `vehicles_count`, `vehicles_density` |
+| `highway_vqvae` | Highway with VQ-VAE world model | Discrete | Same as highway |
 | `intersection` | Navigate through an intersection | Discrete | `initial_vehicle_count` (max 20) |
+| `intersection_vqvae` | Intersection with VQ-VAE | Discrete | Same as intersection |
 | `parking` | Park in a designated spot | Continuous | No other vehicles |
 | `merge` | Merge onto a highway | Discrete | Fixed (vehicles from ramp) |
 | `roundabout` | Navigate a roundabout | Discrete | Dynamic spawning |
@@ -86,71 +97,128 @@ Low-level, direct control. The agent outputs **2 continuous values**:
 
 ## Available Environments
 
-### Highway (`highway`)
+### Highway (`highway` / `highway_vqvae`)
 Standard highway driving scenario. The agent must navigate through traffic, change lanes, and maintain speed.
 
 ```powershell
-python dreamer.py --configs highway --logdir ./logdir/highway --device cuda:0
+# DreamerV3
+python train.py --configs highway --logdir ./logdir/highway --device cuda:0
+
+# VQ-VAE
+python train.py --configs highway_vqvae --logdir ./logdir/highway_vqvae --device cuda:0
 ```
 
-### Intersection (`intersection`)
+### Intersection (`intersection` / `intersection_vqvae`)
 The agent must cross an intersection while avoiding collisions with other vehicles.
 
 ```powershell
-python dreamer.py --configs intersection --logdir ./logdir/intersection --device cuda:0
+# DreamerV3
+python train.py --configs intersection --logdir ./logdir/intersection --device cuda:0
+
+# VQ-VAE
+python train.py --configs intersection_vqvae --logdir ./logdir/intersection_vqvae --device cuda:0
 ```
 
 ### Parking (`parking`)
 Goal-conditioned parking task. The agent must park in a designated spot using continuous steering and acceleration.
 
 ```powershell
-python dreamer.py --configs parking --logdir ./logdir/parking --device cuda:0
+python train.py --configs parking --logdir ./logdir/parking --device cuda:0
 ```
 
 ### Merge (`merge`)
 The agent must merge onto a highway from an on-ramp while avoiding collisions.
 
 ```powershell
-python dreamer.py --configs merge --logdir ./logdir/merge --device cuda:0
+python train.py --configs merge --logdir ./logdir/merge --device cuda:0
 ```
 
 ### Roundabout (`roundabout`)
 Navigate through a roundabout with multiple entry and exit points.
 
 ```powershell
-python dreamer.py --configs roundabout --logdir ./logdir/roundabout --device cuda:0
+python train.py --configs roundabout --logdir ./logdir/roundabout --device cuda:0
 ```
 
 ### Racetrack (`racetrack`)
 Race on a curved track using continuous control for smooth steering.
 
 ```powershell
-python dreamer.py --configs racetrack --logdir ./logdir/racetrack --device cuda:0
+python train.py --configs racetrack --logdir ./logdir/racetrack --device cuda:0
+```
+
+## World Model Selection
+
+This project supports two world model architectures that can be switched via configuration:
+
+### DreamerV3 (Default)
+The default RSSM-based world model with actor-critic learning.
+
+- **Latent Space**: Continuous + Discrete stochastic states
+- **Dynamics**: GRU-based recurrent model
+- **Policy**: Actor-critic with imagination rollouts
+- **Best for**: General-purpose, stable training
+
+### VQ-VAE World Model
+Alternative world model using Vector Quantized VAE with discrete latent codes.
+
+- **Latent Space**: 8×8 grid of discrete codes (128 codebook size)
+- **Dynamics**: ConvLSTM with 2 layers
+- **Policy**: PPO in imagined rollouts
+- **Best for**: Discrete/symbolic state representations
+
+### Switching World Models
+
+**Via config name:**
+```powershell
+# Uses DreamerV3 by default
+python train.py --configs highway --logdir ./logdir/highway
+
+# Uses VQ-VAE (config has world_model='vqvae')
+python train.py --configs highway_vqvae --logdir ./logdir/highway_vqvae
+```
+
+**Via command line override:**
+```powershell
+# Force VQ-VAE on any config
+python train.py --configs highway --world_model vqvae --logdir ./logdir/highway_vqvae
 ```
 
 ## Training
 
+### Training Scripts
+
+| Script | Description |
+|--------|-------------|
+| `train.py` | **Recommended** - Unified training script supporting both world models |
+| `dreamer.py` | Original DreamerV3 training script (Dreamer only) |
+
 ### Basic Training Command
 
 ```powershell
-python dreamer.py --configs <environment> --logdir <path> --device cuda:0
+python train.py --configs <environment> --logdir <path> --device cuda:0
 ```
 
 ### Examples
 
-**Train on highway environment:**
+**Train DreamerV3 on highway environment:**
 ```powershell
-python dreamer.py --configs highway --logdir E:\MyWork\dreamerv3-torch\logdir\highway --device cuda:0
+python train.py --configs highway --logdir ./logdir/highway --device cuda:0
 ```
 
-**Train with continuous actions:**
+**Train VQ-VAE on highway environment:**
 ```powershell
-python dreamer.py --configs highway_continuous --logdir ./logdir/highway_continuous --device cuda:0
+python train.py --configs highway_vqvae --logdir ./logdir/highway_vqvae --device cuda:0
+```
+
+**Train with continuous actions (DreamerV3 only):**
+```powershell
+python train.py --configs highway_continuous --logdir ./logdir/highway_continuous --device cuda:0
 ```
 
 **Resume training from checkpoint:**
 ```powershell
-python dreamer.py --configs highway --logdir ./logdir/highway --device cuda:0
+python train.py --configs highway --logdir ./logdir/highway --device cuda:0
 # (automatically resumes if checkpoint exists)
 ```
 
@@ -161,15 +229,60 @@ With default settings (RTX 4060 or similar):
 - Evaluations every 5k steps
 - Logs every 1k steps
 
+## Evaluation
+
+### Evaluation Script
+
+Use `evaluate.py` to evaluate trained models. It automatically detects the world model type from the saved config.
+
+```powershell
+python evaluate.py --logdir <checkpoint_path> --config <config_name> --episodes <num_episodes>
+```
+
+### Evaluation Examples
+
+**Evaluate DreamerV3 model:**
+```powershell
+python evaluate.py --logdir ./logdir/highway --config highway --episodes 10
+```
+
+**Evaluate VQ-VAE model:**
+```powershell
+python evaluate.py --logdir ./logdir/highway_vqvae --config highway_vqvae --episodes 10
+```
+
+**Override world model type (if auto-detection fails):**
+```powershell
+python evaluate.py --logdir ./logdir/highway --config highway --world_model vqvae --episodes 10
+```
+
+### Evaluation Metrics
+
+The evaluation script reports the following metrics:
+
+| Metric | Description |
+|--------|-------------|
+| `avg_reward` | Average episode reward |
+| `avg_length` | Average episode length |
+| `collision_rate` | Percentage of episodes ending in collision |
+| `offroad_rate` | Percentage of episodes going off-road |
+| `success_rate` | Percentage of successful episodes (no collision, no offroad) |
+| `lateral_deviation` | Average lateral deviation from lane center |
+| `minADE` | Minimum Average Displacement Error |
+| `driving_score` | Combined driving quality score |
+
 ## Configuration Options
 
 ### Pre-configured Variants
 
-| Config Name | Observation | Action | Use Case |
-|-------------|-------------|--------|----------|
-| `highway` | Image (64x64 RGB) | Discrete | Standard training |
-| `highway_kinematics` | Kinematics vectors | Discrete | Faster training, no images |
-| `highway_continuous` | Image (64x64 RGB) | Continuous | Fine-grained control |
+| Config Name | World Model | Observation | Action | Use Case |
+|-------------|-------------|-------------|--------|----------|
+| `highway` | DreamerV3 | Image (64x64 RGB) | Discrete | Standard training |
+| `highway_vqvae` | VQ-VAE | Image (64x64 RGB) | Discrete | VQ-VAE world model |
+| `highway_kinematics` | DreamerV3 | Kinematics vectors | Discrete | Faster training, no images |
+| `highway_continuous` | DreamerV3 | Image (64x64 RGB) | Continuous | Fine-grained control |
+| `intersection` | DreamerV3 | Image (64x64 RGB) | Discrete | Intersection scenario |
+| `intersection_vqvae` | VQ-VAE | Image (64x64 RGB) | Discrete | VQ-VAE intersection |
 
 ### Vehicle Density Configuration
 
@@ -177,13 +290,13 @@ Control the number of vehicles in environments:
 
 ```powershell
 # Highway with 50 vehicles (default)
-python dreamer.py --configs highway --highway_vehicles_count 50 --device cuda:0
+python train.py --configs highway --highway_vehicles_count 50 --device cuda:0
 
 # Fewer vehicles for easier learning
-python dreamer.py --configs highway --highway_vehicles_count 10 --device cuda:0
+python train.py --configs highway --highway_vehicles_count 10 --device cuda:0
 
 # More dense traffic
-python dreamer.py --configs highway --highway_vehicles_count 80 --highway_vehicles_density 2.0 --device cuda:0
+python train.py --configs highway --highway_vehicles_count 80 --highway_vehicles_density 2.0 --device cuda:0
 ```
 
 | Parameter | Default | Description |
@@ -268,7 +381,20 @@ highway:
 
 Or via command line:
 ```powershell
-python dreamer.py --configs highway --highway_reward_shaping False --logdir ./logdir/highway_original
+python train.py --configs highway --highway_reward_shaping False --logdir ./logdir/highway_original
+```
+
+### VQ-VAE Specific Configuration
+
+When using VQ-VAE world model, additional parameters are available:
+
+```yaml
+highway_vqvae:
+  world_model: 'vqvae'           # Select VQ-VAE world model
+  vqvae_embedding_dim: 32        # Dimension of codebook embeddings
+  vqvae_num_embeddings: 128      # Number of codes in codebook
+  vqvae_hidden_channels: 256     # Hidden channels in encoder/decoder
+  vqvae_commitment_cost: 0.25    # Commitment loss weight
 ```
 
 ### Custom Configuration
@@ -277,19 +403,20 @@ You can override config values via command line:
 
 ```powershell
 # Train for more steps
-python dreamer.py --configs highway --steps 5e5 --logdir ./logdir/highway_long
+python train.py --configs highway --steps 5e5 --logdir ./logdir/highway_long
 
 # Change training ratio (fewer gradient steps per environment step)
-python dreamer.py --configs highway --train_ratio 32 --logdir ./logdir/highway_fast
+python train.py --configs highway --train_ratio 32 --logdir ./logdir/highway_fast
 
 # Adjust evaluation frequency
-python dreamer.py --configs highway --eval_every 1e4 --logdir ./logdir/highway
+python train.py --configs highway --eval_every 1e4 --logdir ./logdir/highway
 ```
 
 ### Key Configuration Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
+| `world_model` | dreamer | World model type ('dreamer' or 'vqvae') |
 | `steps` | 1e5 | Total training steps |
 | `train_ratio` | 64 | Gradient steps per env step |
 | `eval_every` | 5e3 | Evaluation frequency |
@@ -300,6 +427,15 @@ python dreamer.py --configs highway --eval_every 1e4 --logdir ./logdir/highway
 | `highway_vehicles_density` | 1.5 | Vehicle density on road |
 | `highway_reward_shaping` | True | Enable reward shaping |
 | `highway_action_type` | discrete | Action type (discrete/continuous) |
+
+### VQ-VAE Specific Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `vqvae_embedding_dim` | 32 | Codebook embedding dimension |
+| `vqvae_num_embeddings` | 128 | Number of codebook entries |
+| `vqvae_hidden_channels` | 256 | Hidden layer channels |
+| `vqvae_commitment_cost` | 0.25 | VQ commitment loss weight |
 
 ## Monitoring Training
 
@@ -342,7 +478,7 @@ pip install pygame
 #### 3. CUDA out of memory
 Reduce batch size or train_ratio:
 ```powershell
-python dreamer.py --configs highway --batch_size 8 --train_ratio 32 --logdir ./logdir/highway
+python train.py --configs highway --batch_size 8 --train_ratio 32 --logdir ./logdir/highway
 ```
 
 #### 4. Slow training
@@ -366,10 +502,15 @@ pip install "numpy>=1.23.5,<2.0"
 
 ```
 dreamerv3-torch/
-├── dreamer.py          # Main training script
+├── train.py            # Unified training script (recommended)
+├── dreamer.py          # Original DreamerV3 training script
+├── evaluate.py         # Model evaluation script
+├── vqvae_agent.py      # VQ-VAE world model agent
 ├── configs.yaml        # All environment configurations
 ├── envs/
 │   ├── highway.py      # Highway-env wrapper
+│   ├── highway_base.py # Highway base environment
+│   ├── highway_rewards.py # Reward shaping logic
 │   └── wrappers.py     # Common environment wrappers
 ├── models.py           # DreamerV3 world model
 ├── networks.py         # Neural network architectures
